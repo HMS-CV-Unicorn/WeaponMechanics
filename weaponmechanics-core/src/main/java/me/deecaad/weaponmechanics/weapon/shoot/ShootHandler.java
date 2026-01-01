@@ -32,6 +32,7 @@ import me.deecaad.weaponmechanics.weapon.weaponevents.PrepareWeaponShootEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponFirearmEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponFullAutoEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponPostShootEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponDelayModifyEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponPreShootEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponShootEvent;
 import me.deecaad.weaponmechanics.wrappers.EntityWrapper;
@@ -207,10 +208,19 @@ public class ShootHandler implements IValidator, TriggerListener {
         }
 
         int weaponEquipDelay = config.getInt(weaponTitle + ".Info.Weapon_Equip_Delay");
+        int shootDelayAfterScope = config.getInt(weaponTitle + ".Scope.Shoot_Delay_After_Scope");
+
+        // Fire event to allow plugins (like WeaponMechanicsPP) to modify delays based on attachments
+        WeaponDelayModifyEvent delayEvent = new WeaponDelayModifyEvent(
+                weaponTitle, weaponStack, entityWrapper.getEntity(), slot,
+                weaponEquipDelay, shootDelayAfterScope);
+        Bukkit.getPluginManager().callEvent(delayEvent);
+        weaponEquipDelay = delayEvent.getEquipDelay();
+        shootDelayAfterScope = delayEvent.getScopeDelay();
+
         if (weaponEquipDelay != 0 && !NumberUtil.hasMillisPassed(handData.getLastEquipTime(), weaponEquipDelay))
             return false;
 
-        int shootDelayAfterScope = config.getInt(weaponTitle + ".Scope.Shoot_Delay_After_Scope");
         if (shootDelayAfterScope != 0 && !NumberUtil.hasMillisPassed(handData.getLastScopeTime(), shootDelayAfterScope))
             return false;
 
