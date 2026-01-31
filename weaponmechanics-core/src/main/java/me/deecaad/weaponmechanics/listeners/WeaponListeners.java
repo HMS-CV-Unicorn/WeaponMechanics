@@ -11,6 +11,7 @@ import me.deecaad.weaponmechanics.weapon.damage.AssistData;
 import me.deecaad.weaponmechanics.weapon.info.WeaponInfoDisplay;
 import me.deecaad.weaponmechanics.weapon.stats.WeaponStat;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponAssistEvent;
+import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponDelayModifyEvent;
 import me.deecaad.weaponmechanics.weapon.weaponevents.WeaponEquipEvent;
 import me.deecaad.weaponmechanics.wrappers.EntityWrapper;
 import me.deecaad.weaponmechanics.wrappers.HandData;
@@ -70,14 +71,17 @@ public class WeaponListeners implements Listener {
                 if (playerWrapper.getStatsData() != null)
                     playerWrapper.getStatsData().add(weaponTitle, WeaponStat.EQUIP_TIMES, 1);
 
-                WeaponInfoDisplay weaponInfoDisplay = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(weaponTitle + ".Info.Weapon_Info_Display", WeaponInfoDisplay.class);
+                WeaponInfoDisplay weaponInfoDisplay = WeaponMechanics.getInstance().getWeaponConfigurations()
+                        .getObject(weaponTitle + ".Info.Weapon_Info_Display", WeaponInfoDisplay.class);
                 if (weaponInfoDisplay != null)
-                    weaponInfoDisplay.send(playerWrapper, e.getSlot(), mainhand ? weaponStack : null, !mainhand ? weaponStack : null);
+                    weaponInfoDisplay.send(playerWrapper, e.getSlot(), mainhand ? weaponStack : null,
+                            !mainhand ? weaponStack : null);
             }
 
             weaponHandler.getSkinHandler().tryUse(entityWrapper, weaponTitle, weaponStack, e.getSlot());
 
-            MechanicManager equipMechanics = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(weaponTitle + ".Info.Weapon_Equip_Mechanics", MechanicManager.class);
+            MechanicManager equipMechanics = WeaponMechanics.getInstance().getWeaponConfigurations()
+                    .getObject(weaponTitle + ".Info.Weapon_Equip_Mechanics", MechanicManager.class);
             if (equipMechanics != null) {
                 equipMechanics.use(new CastData(entity, weaponTitle, weaponStack));
                 alreadyUsedEquipMechanics = true;
@@ -85,7 +89,21 @@ public class WeaponListeners implements Listener {
 
             handData.setLastEquipTime(System.currentTimeMillis());
 
-            Bukkit.getPluginManager().callEvent(new WeaponEquipEvent(weaponTitle, weaponStack, entity, e.getSlot() == EquipmentSlot.HAND));
+            // Get base delays and fire WeaponDelayModifyEvent to allow plugins to modify
+            // them
+            int equipDelay = WeaponMechanics.getInstance().getWeaponConfigurations()
+                    .getInt(weaponTitle + ".Info.Weapon_Equip_Delay");
+            int scopeDelay = WeaponMechanics.getInstance().getWeaponConfigurations()
+                    .getInt(weaponTitle + ".Scope.Shoot_Delay_After_Scope");
+
+            WeaponDelayModifyEvent delayEvent = new WeaponDelayModifyEvent(
+                    weaponTitle, weaponStack, entity, e.getSlot(), equipDelay, scopeDelay);
+            Bukkit.getPluginManager().callEvent(delayEvent);
+            equipDelay = delayEvent.getEquipDelay();
+            scopeDelay = delayEvent.getScopeDelay();
+
+            Bukkit.getPluginManager().callEvent(new WeaponEquipEvent(weaponTitle, weaponStack, entity,
+                    e.getSlot() == EquipmentSlot.HAND, equipDelay, scopeDelay));
         } else {
             // If not-weapon was equipped, cancel all tasks
             handData.cancelTasks(false);
@@ -97,7 +115,8 @@ public class WeaponListeners implements Listener {
 
             // Don't use holster mechanics is equip mechanics were already used
             if (!alreadyUsedEquipMechanics) {
-                MechanicManager holsterMechanics = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(dequippedWeapon + ".Info.Weapon_Holster_Mechanics", MechanicManager.class);
+                MechanicManager holsterMechanics = WeaponMechanics.getInstance().getWeaponConfigurations()
+                        .getObject(dequippedWeapon + ".Info.Weapon_Holster_Mechanics", MechanicManager.class);
                 if (holsterMechanics != null)
                     holsterMechanics.use(new CastData(entity, dequippedWeapon, dequipped));
             }
@@ -114,11 +133,13 @@ public class WeaponListeners implements Listener {
         Player player = e.getPlayer();
         EntityWrapper entityWrapper = WeaponMechanics.getInstance().getEntityWrapper(player);
         entityWrapper.getMainHandData().cancelTasks();
-        // No need to cancel off hand tasks since this is only called when changing held slot
+        // No need to cancel off hand tasks since this is only called when changing held
+        // slot
         // Unless player is now dual wielding
         EntityEquipment entityEquipment = player.getEquipment();
         ItemStack nextSlot = player.getInventory().getItem(e.getNewSlot());
-        if (entityEquipment.getItemInOffHand().getType() != Material.AIR && nextSlot != null && nextSlot.getType() != Material.AIR) {
+        if (entityEquipment.getItemInOffHand().getType() != Material.AIR && nextSlot != null
+                && nextSlot.getType() != Material.AIR) {
             entityWrapper.getOffHandData().cancelTasks(true);
         }
     }
@@ -134,9 +155,11 @@ public class WeaponListeners implements Listener {
                     StatsData statsData = WeaponMechanics.getInstance().getPlayerWrapper(player).getStatsData();
                     if (statsData != null) {
                         if (entity.getType() == EntityType.PLAYER) {
-                            data.keySet().forEach((weaponTitle) -> statsData.add(weaponTitle, WeaponStat.PLAYER_ASSISTS, 1));
+                            data.keySet()
+                                    .forEach((weaponTitle) -> statsData.add(weaponTitle, WeaponStat.PLAYER_ASSISTS, 1));
                         } else {
-                            data.keySet().forEach((weaponTitle) -> statsData.add(weaponTitle, WeaponStat.OTHER_ASSISTS, 1));
+                            data.keySet()
+                                    .forEach((weaponTitle) -> statsData.add(weaponTitle, WeaponStat.OTHER_ASSISTS, 1));
                         }
                     }
 
@@ -180,7 +203,7 @@ public class WeaponListeners implements Listener {
         // Keep track of when last inventory click drop happens
         ClickType clickType = e.getClick();
         if (clickType == ClickType.DROP || clickType == ClickType.CONTROL_DROP
-            || e.getSlot() == -999) {
+                || e.getSlot() == -999) {
             playerWrapper.inventoryDrop();
         }
 
