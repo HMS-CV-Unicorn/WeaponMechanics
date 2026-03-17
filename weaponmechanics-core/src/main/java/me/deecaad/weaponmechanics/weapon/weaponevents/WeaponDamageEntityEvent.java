@@ -292,8 +292,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setDamageMechanics(@Nullable MechanicManager damageMechanics) {
-        if (this.damageMechanics != null)
-            this.damageMechanics.clearDirty(); // clear any modifications
         this.damageMechanics = damageMechanics;
     }
 
@@ -302,8 +300,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setKillMechanics(@Nullable MechanicManager killMechanics) {
-        if (this.killMechanics != null)
-            this.killMechanics.clearDirty(); // clear any modifications
         this.killMechanics = killMechanics;
     }
 
@@ -312,8 +308,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setBackstabMechanics(@Nullable MechanicManager backstabMechanics) {
-        if (this.backstabMechanics != null)
-            this.backstabMechanics.clearDirty(); // clear any modifications
         this.backstabMechanics = backstabMechanics;
     }
 
@@ -322,8 +316,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setCriticalHitMechanics(@Nullable MechanicManager criticalHitMechanics) {
-        if (this.criticalHitMechanics != null)
-            this.criticalHitMechanics.clearDirty(); // clear any modifications
         this.criticalHitMechanics = criticalHitMechanics;
     }
 
@@ -332,8 +324,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setHeadMechanics(@Nullable MechanicManager headMechanics) {
-        if (this.headMechanics != null)
-            this.headMechanics.clearDirty(); // clear any modifications
         this.headMechanics = headMechanics;
     }
 
@@ -342,8 +332,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setBodyMechanics(@Nullable MechanicManager bodyMechanics) {
-        if (this.bodyMechanics != null)
-            this.bodyMechanics.clearDirty(); // clear any modifications
         this.bodyMechanics = bodyMechanics;
     }
 
@@ -352,8 +340,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setArmsMechanics(@Nullable MechanicManager armsMechanics) {
-        if (this.armsMechanics != null)
-            this.armsMechanics.clearDirty(); // clear any modifications
         this.armsMechanics = armsMechanics;
     }
 
@@ -362,8 +348,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setLegsMechanics(@Nullable MechanicManager legsMechanics) {
-        if (this.legsMechanics != null)
-            this.legsMechanics.clearDirty(); // clear any modifications
         this.legsMechanics = legsMechanics;
     }
 
@@ -372,8 +356,6 @@ public class WeaponDamageEntityEvent extends WeaponEvent implements Cancellable 
     }
 
     public void setFeetMechanics(@Nullable MechanicManager feetMechanics) {
-        if (this.feetMechanics != null)
-            this.feetMechanics.clearDirty(); // clear any modifications
         this.feetMechanics = feetMechanics;
     }
 
