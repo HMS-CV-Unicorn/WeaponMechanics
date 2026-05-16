@@ -511,6 +511,33 @@ public abstract class AProjectile {
         scriptEvent(proj -> proj.onCollide(hit));
     }
 
+    /**
+     * Replaces this projectile's elapsed-tick counter. Used by predictive simulation when replaying
+     * the precomputed trajectory at real-time speed so that {@link ProjectileScript} hooks see a
+     * tick counter that matches the visual animation rather than the synchronous burst that ran at
+     * fire time.
+     */
+    public void setAliveTicks(int aliveTicks) {
+        this.aliveTicks = aliveTicks;
+    }
+
+    /**
+     * Fire the {@link ProjectileScript#onTickStart()} hook on every attached script. Exposed so
+     * predictive mode's disguise animator can drive cosmetic scripts at real-tick cadence rather
+     * than in the synchronous simulation burst.
+     */
+    public void fireScriptTickStart() {
+        scriptEvent(ProjectileScript::onTickStart);
+    }
+
+    /**
+     * Fire the {@link ProjectileScript#onTickEnd()} hook on every attached script. See
+     * {@link #fireScriptTickStart()}.
+     */
+    public void fireScriptTickEnd() {
+        scriptEvent(ProjectileScript::onTickEnd);
+    }
+
     protected void scriptEvent(Consumer<ProjectileScript<?>> consumer) {
         Iterator<ProjectileScript<?>> iterator = scripts.iterator();
         boolean removeProjectile = false;

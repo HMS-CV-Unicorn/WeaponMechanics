@@ -40,10 +40,20 @@ public class ScheduledHitDispatcher {
         ServerImplementation scheduler = WeaponMechanics.getInstance().getFoliaScheduler();
         ProjectileSettings settings = projectile.getProjectileSettings();
 
-        FakeEntity disguise = spawnDisguise(settings, originLocation);
-        if (disguise != null) {
-            animateDisguise(disguise, result.path(), scheduler, originLocation);
+        // Attach scripts now that the synchronous burst is done. Reset the alive-tick counter so
+        // scripts see a fresh-from-fire-time projectile during animation, even though the
+        // simulator already advanced it internally.
+        WeaponMechanics.getInstance().getProjectileSpawner().attachScripts(projectile);
+        projectile.setAliveTicks(0);
+        try {
+            projectile.onStart();
+        } catch (Throwable ex) {
+            WeaponMechanics.getInstance().debugger.warning(
+                "An unhandled exception occurred while firing predictive projectile onStart", ex);
         }
+
+        FakeEntity disguise = spawnDisguise(settings, originLocation);
+        animatePath(projectile, disguise, result, scheduler, originLocation);
 
         scheduleHits(projectile, result.hits(), scheduler);
         scheduleEndEvent(projectile, result, scheduler, disguise);
@@ -80,28 +90,81 @@ public class ScheduledHitDispatcher {
         return fakeEntity;
     }
 
-    private static void animateDisguise(FakeEntity disguise, List<PredictiveProjectileSimulator.PathSample> path,
-                                        ServerImplementation scheduler, Location originLocation) {
+    /**
+     * Drives the projectile through its precomputed path at real-tick cadence so attached
+     * {@link me.deecaad.weaponmechanics.weapon.projectile.ProjectileScript} hooks (cosmetic
+     * trails, WMP integrations) fire spaced over real time rather than in the synchronous
+     * simulation burst. The visual disguise is moved alongside if present.
+     *
+     * <p>Each tick the projectile's location, motion, and {@code aliveTicks} are stepped forward
+     * to the matching path sample before {@code onTickStart} is fired, so scripts that read those
+     * fields see consistent state. Any deferred hit whose tickOffset matches the current step
+     * also fires the {@code onCollide} script hook (damage application is scheduled separately).
+     */
+    private static void animatePath(WeaponProjectile projectile, @Nullable FakeEntity disguise,
+                                    PredictiveProjectileSimulator.SimulationResult result,
+                                    ServerImplementation scheduler, Location originLocation) {
+        List<PredictiveProjectileSimulator.PathSample> path = result.path();
+        List<PredictiveProjectileSimulator.DeferredHit> hits = result.hits();
+
         if (path.size() < 2) {
-            // Nothing to animate; just remove the disguise on a short delay so it's visible briefly.
-            scheduler.region(originLocation).runDelayed(() -> disguise.remove(), 2L);
+            if (disguise != null)
+                scheduler.region(originLocation).runDelayed(() -> disguise.remove(), 2L);
             return;
         }
 
         int[] index = {1};
         scheduler.region(originLocation).runAtFixedRate(task -> {
             if (index[0] >= path.size()) {
-                disguise.remove();
+                if (disguise != null)
+                    disguise.remove();
                 task.cancel();
                 return;
             }
             PredictiveProjectileSimulator.PathSample current = path.get(index[0]);
             PredictiveProjectileSimulator.PathSample previous = path.get(index[0] - 1);
             Vector delta = current.location().clone().subtract(previous.location());
-            float yaw = computeYaw(delta);
-            float pitch = computePitch(delta);
-            disguise.setPosition(current.location().getX(), current.location().getY(), current.location().getZ(), yaw, pitch, false);
-            disguise.setMotion(delta);
+
+            // Sync the projectile's per-tick state so scripts reading getLocation/getMotion/
+            // getAliveTicks during their callbacks see what they would see in PHYSICAL mode.
+            projectile.setRawLocation(current.location());
+            projectile.setMotion(delta);
+            projectile.setAliveTicks(current.tickOffset());
+
+            try {
+                projectile.fireScriptTickStart();
+            } catch (Throwable ex) {
+                WeaponMechanics.getInstance().debugger.warning(
+                    "An unhandled exception occurred during predictive onTickStart", ex);
+            }
+
+            if (disguise != null) {
+                float yaw = computeYaw(delta);
+                float pitch = computePitch(delta);
+                disguise.setPosition(current.location().getX(), current.location().getY(), current.location().getZ(), yaw, pitch, false);
+                disguise.setMotion(delta);
+            }
+
+            // Fire onCollide for any hit whose tickOffset matches this animation step. This is
+            // independent of damage application — damage is scheduled separately in scheduleHits.
+            for (PredictiveProjectileSimulator.DeferredHit deferred : hits) {
+                if (deferred.tickOffset() == current.tickOffset()) {
+                    try {
+                        projectile.onCollide(deferred.hit());
+                    } catch (Throwable ex) {
+                        WeaponMechanics.getInstance().debugger.warning(
+                            "An unhandled exception occurred during predictive onCollide", ex);
+                    }
+                }
+            }
+
+            try {
+                projectile.fireScriptTickEnd();
+            } catch (Throwable ex) {
+                WeaponMechanics.getInstance().debugger.warning(
+                    "An unhandled exception occurred during predictive onTickEnd", ex);
+            }
+
             index[0]++;
         }, 1L, 1L);
     }

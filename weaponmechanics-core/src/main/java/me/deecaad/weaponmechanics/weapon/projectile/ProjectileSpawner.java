@@ -50,12 +50,21 @@ public abstract class ProjectileSpawner {
      */
     public abstract void spawn(@NotNull AProjectile projectile);
 
-    protected boolean doFirstTick(@NotNull AProjectile projectile) {
+    /**
+     * Runs every registered {@link ProjectileScriptManager} against this projectile, attaching any
+     * scripts they produce. Exposed so predictive projectile mode (which bypasses the per-tick
+     * spawner loop) can still wire in cosmetic / WMP scripts for trail playback.
+     */
+    public void attachScripts(@NotNull AProjectile projectile) {
         synchronized (managers) {
             for (ProjectileScriptManager manager : managers) {
                 manager.attach(projectile);
             }
         }
+    }
+
+    protected boolean doFirstTick(@NotNull AProjectile projectile) {
+        attachScripts(projectile);
 
         try {
             if (projectile.tick()) {
