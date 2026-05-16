@@ -41,6 +41,8 @@ import me.deecaad.weaponmechanics.weapon.placeholders.WeaponPlaceholderHandlers;
 import me.deecaad.weaponmechanics.weapon.projectile.FoliaProjectileSpawner;
 import me.deecaad.weaponmechanics.weapon.projectile.ProjectileSpawner;
 import me.deecaad.weaponmechanics.weapon.projectile.SpigotProjectileSpawner;
+import me.deecaad.weaponmechanics.weapon.projectile.predictive.HitboxHistoryManager;
+import me.deecaad.weaponmechanics.weapon.projectile.predictive.PredictiveProjectileSimulator;
 import me.deecaad.weaponmechanics.weapon.projectile.weaponprojectile.Projectile;
 import me.deecaad.weaponmechanics.weapon.reload.ammo.Ammo;
 import me.deecaad.weaponmechanics.weapon.stats.PlayerStat;
@@ -81,6 +83,8 @@ public class WeaponMechanics extends MechanicsPlugin {
     private @Nullable WeaponHandler weaponHandler;
     private @Nullable ResourcePackListener resourcePackListener;
     private @Nullable ProjectileSpawner projectileSpawner;
+    private @Nullable HitboxHistoryManager hitboxHistoryManager;
+    private @Nullable PredictiveProjectileSimulator predictiveSimulator;
     private @Nullable Database database;
 
     private @NotNull Configuration ammoConfigurations = new FastConfiguration();
@@ -403,6 +407,15 @@ public class WeaponMechanics extends MechanicsPlugin {
         } else {
             projectileSpawner = new SpigotProjectileSpawner(this);
         }
+
+        // Predictive (lag-compensated) projectile machinery
+        if (hitboxHistoryManager != null) {
+            hitboxHistoryManager.shutdown();
+        }
+        hitboxHistoryManager = new HitboxHistoryManager();
+        Bukkit.getPluginManager().registerEvents(hitboxHistoryManager, this);
+        hitboxHistoryManager.initializeOnlinePlayers();
+        predictiveSimulator = new PredictiveProjectileSimulator(hitboxHistoryManager);
     }
 
 
@@ -464,6 +477,12 @@ public class WeaponMechanics extends MechanicsPlugin {
             }
         }
 
+        if (hitboxHistoryManager != null) {
+            hitboxHistoryManager.shutdown();
+            hitboxHistoryManager = null;
+        }
+        predictiveSimulator = null;
+
         database = null;
         weaponHandler = null;
         entityWrappers.clear();
@@ -489,6 +508,18 @@ public class WeaponMechanics extends MechanicsPlugin {
         if (projectileSpawner == null)
             throw new UninitializedPropertyAccessException();
         return projectileSpawner;
+    }
+
+    public @NotNull HitboxHistoryManager getHitboxHistoryManager() {
+        if (hitboxHistoryManager == null)
+            throw new UninitializedPropertyAccessException();
+        return hitboxHistoryManager;
+    }
+
+    public @NotNull PredictiveProjectileSimulator getPredictiveSimulator() {
+        if (predictiveSimulator == null)
+            throw new UninitializedPropertyAccessException();
+        return predictiveSimulator;
     }
 
     public @NotNull Configuration getAmmoConfigurations() {

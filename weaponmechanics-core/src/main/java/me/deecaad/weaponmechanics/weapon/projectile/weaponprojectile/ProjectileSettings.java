@@ -19,8 +19,30 @@ public class ProjectileSettings implements Serializer<ProjectileSettings>, Clone
     private static final EntityType FIREWORK_ENTITY = MinecraftVersions.TRAILS_AND_TAILS.get(5).isAtLeast() ? EntityType.FIREWORK_ROCKET : EntityType.valueOf("FIREWORK");
     private static final EntityType ITEM_ENTITY = MinecraftVersions.TRAILS_AND_TAILS.get(5).isAtLeast() ? EntityType.ITEM : EntityType.valueOf("DROPPED_ITEM");
 
+    /**
+     * How this projectile should be simulated.
+     *
+     * <ul>
+     *   <li>{@link #PREDICTIVE} (default): the entire trajectory is computed synchronously at fire
+     *       time. Hits are determined immediately against lag-compensated hitboxes, and damage
+     *       application / visual disguise are scheduled to fire at the time the bullet would
+     *       actually arrive. Recommended for hitscan-feel firearms.</li>
+     *   <li>{@link #PHYSICAL}: classic per-tick physics simulation. Each server tick advances the
+     *       bullet one step. Hits are evaluated against the current world state. Recommended for
+     *       grenades and other projectiles where the in-flight physics matters more than the
+     *       hit-feel.</li>
+     * </ul>
+     */
+    public enum Mode {
+        PREDICTIVE,
+        PHYSICAL,
+    }
+
     private EntityType projectileDisguise;
     private Object disguiseData;
+
+    private Mode mode = Mode.PREDICTIVE;
+    private boolean lagCompensation = true;
 
     private double gravity;
 
@@ -66,6 +88,28 @@ public class ProjectileSettings implements Serializer<ProjectileSettings>, Clone
         this.size = size;
         this.incendiaryProjectile = incendiaryProjectile;
         this.extinguishInWater = extinguishInWater;
+    }
+
+    /**
+     * @return the simulation mode for this projectile (never null; defaults to PREDICTIVE)
+     */
+    @NotNull public Mode getMode() {
+        return mode == null ? Mode.PREDICTIVE : mode;
+    }
+
+    public void setMode(@NotNull Mode mode) {
+        this.mode = mode;
+    }
+
+    /**
+     * @return whether to roll back target hitboxes by shooter ping when running predictive mode
+     */
+    public boolean isLagCompensation() {
+        return lagCompensation;
+    }
+
+    public void setLagCompensation(boolean lagCompensation) {
+        this.lagCompensation = lagCompensation;
     }
 
     /**
@@ -326,9 +370,15 @@ public class ProjectileSettings implements Serializer<ProjectileSettings>, Clone
         boolean incendiaryProjectile = data.of("Incendiary_Projectile").getBool().orElse(false);
         boolean extinguishInWater = data.of("Extinguish_In_Water").getBool().orElse(true);
 
-        return new ProjectileSettings(projectileType, disguiseData, gravity, removeAtMinimumSpeed, minimumSpeed,
+        Mode mode = data.of("Mode").getEnum(Mode.class).orElse(Mode.PREDICTIVE);
+        boolean lagCompensation = data.of("Lag_Compensation").getBool().orElse(true);
+
+        ProjectileSettings settings = new ProjectileSettings(projectileType, disguiseData, gravity, removeAtMinimumSpeed, minimumSpeed,
             removeAtMaximumSpeed, maximumSpeed, decrease, decreaseInWater, decreaseWhenRainingOrSnowing,
             disableEntityCollisions, maximumAliveTicks, maximumTravelDistance, size, incendiaryProjectile, extinguishInWater);
+        settings.setMode(mode);
+        settings.setLagCompensation(lagCompensation);
+        return settings;
     }
 
     @Override

@@ -22,6 +22,18 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class WeaponProjectile extends AProjectile {
 
+    /**
+     * Optional interceptor used by predictive simulation. When set, every block/entity hit
+     * encountered during {@link #updatePosition()} is routed through this interceptor instead of
+     * being applied directly via {@link me.deecaad.weaponmechanics.weapon.HitHandler}. The
+     * interceptor returns the same boolean contract: <code>true</code> means the hit was
+     * cancelled and the projectile should ignore it.
+     */
+    @FunctionalInterface
+    public interface HitInterceptor {
+        boolean intercept(me.deecaad.core.utils.ray.RayTraceResult hit, WeaponProjectile projectile);
+    }
+
     // These may be modified by WMP. We have booleans to check if a new copy
     // was made of these variables.
     private ProjectileSettings projectileSettings;
@@ -49,7 +61,8 @@ public class WeaponProjectile extends AProjectile {
     private int lastEntityUpdateTick;
     private int lastEntity = -1;
 
-    private final RayTrace rayTrace;
+    private RayTrace rayTrace;
+    private @Nullable HitInterceptor hitInterceptor;
 
     public WeaponProjectile(ProjectileSettings projectileSettings, LivingEntity shooter, Location location,
         Vector motion, ItemStack weaponStack, String weaponTitle, EquipmentSlot hand,
@@ -429,7 +442,13 @@ public class WeaponProjectile extends AProjectile {
             }
 
             // Returned true and that most likely means that block hit was cancelled, skipping...
-            if (WeaponMechanics.getInstance().getWeaponHandler().getHitHandler().handleHit(hit, this))
+            boolean cancelled;
+            if (hitInterceptor != null) {
+                cancelled = hitInterceptor.intercept(hit, this);
+            } else {
+                cancelled = WeaponMechanics.getInstance().getWeaponHandler().getHitHandler().handleHit(hit, this);
+            }
+            if (cancelled)
                 continue;
 
             // Through
@@ -520,9 +539,56 @@ public class WeaponProjectile extends AProjectile {
             && getAliveTicks() <= lastEntityUpdateTick; // Check hit tick
     }
 
+    /**
+     * Exposed for predictive simulation: returns true when the supplied block should be skipped
+     * by ray tracing because it matches the last block this projectile collided with on a recent
+     * tick. Mirrors the internal filter used in the default ray trace.
+     */
+    public boolean isRecentlyHitBlock(Block block) {
+        return equalToLastHit(block);
+    }
+
+    /**
+     * Exposed for predictive simulation: returns true when the supplied entity should be skipped
+     * by ray tracing because it matches the last entity this projectile collided with on a recent
+     * tick. Mirrors the internal filter used in the default ray trace.
+     */
+    public boolean isRecentlyHitEntity(LivingEntity entity) {
+        return equalToLastHit(entity);
+    }
+
     @Override
     public void onEnd() {
         super.onEnd();
         Bukkit.getPluginManager().callEvent(new ProjectileEndEvent(this));
+    }
+
+    /**
+     * Replaces the ray trace used to evaluate collisions each tick. Used by predictive simulation
+     * to swap in a lag-compensated ray trace that consults the {@link
+     * me.deecaad.weaponmechanics.weapon.projectile.predictive.HitboxHistoryManager}.
+     */
+    public void setRayTrace(@NotNull RayTrace rayTrace) {
+        this.rayTrace = rayTrace;
+    }
+
+    /**
+     * @return the current ray trace instance used for collision checks
+     */
+    public @NotNull RayTrace getRayTrace() {
+        return rayTrace;
+    }
+
+    /**
+     * Installs an interceptor that captures every hit encountered during {@link #updatePosition()}.
+     * When set, the default {@link me.deecaad.weaponmechanics.weapon.HitHandler#handleHit} call is
+     * bypassed and the interceptor's return value is honored instead.
+     */
+    public void setHitInterceptor(@Nullable HitInterceptor interceptor) {
+        this.hitInterceptor = interceptor;
+    }
+
+    public @Nullable HitInterceptor getHitInterceptor() {
+        return hitInterceptor;
     }
 }

@@ -13,6 +13,8 @@ import me.deecaad.core.mechanics.Mechanics;
 import me.deecaad.weaponmechanics.WeaponMechanics;
 import me.deecaad.weaponmechanics.weapon.explode.Explosion;
 import me.deecaad.weaponmechanics.weapon.explode.ExplosionTrigger;
+import me.deecaad.weaponmechanics.weapon.projectile.predictive.PredictiveProjectileSimulator;
+import me.deecaad.weaponmechanics.weapon.projectile.predictive.ScheduledHitDispatcher;
 import org.bukkit.Location;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
@@ -69,7 +71,7 @@ public class Projectile implements Serializer<Projectile> {
     public WeaponProjectile shoot(WeaponProjectile projectile, Location location) {
         String weaponTitle = projectile.getWeaponTitle();
         ItemStack weaponStack = projectile.getWeaponStack();
-        
+
         if (mechanics != null && weaponTitle != null) {
             CastData cast = new CastData(projectile.getShooter(), weaponTitle, weaponStack);
             cast.setTargetLocation(() -> projectile.getLocation().toLocation(projectile.getWorld()));
@@ -77,8 +79,27 @@ public class Projectile implements Serializer<Projectile> {
         }
 
         ProjectileSettings settings = projectile.getProjectileSettings();
-        EntityType type = settings.getProjectileDisguise();
+        ProjectileSettings.Mode mode = settings.getMode();
 
+        // Handle spawn-time explosions identically for both modes (the explosion fires from where
+        // the bullet is born — independent of how the bullet itself is simulated).
+        if (weaponTitle != null) {
+            Explosion explosion = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(weaponTitle + ".Explosion", Explosion.class);
+            if (explosion != null)
+                explosion.handleExplosion(projectile.getShooter(), projectile, ExplosionTrigger.SPAWN);
+        }
+
+        if (mode == ProjectileSettings.Mode.PREDICTIVE) {
+            // Predictive mode: simulate the entire trajectory synchronously, then schedule hits and
+            // animate a freshly-spawned disguise along the precomputed path. No per-tick ticking.
+            PredictiveProjectileSimulator simulator = WeaponMechanics.getInstance().getPredictiveSimulator();
+            PredictiveProjectileSimulator.SimulationResult result = simulator.simulate(projectile);
+            ScheduledHitDispatcher.dispatch(projectile, result, location);
+            return projectile;
+        }
+
+        // PHYSICAL mode below: original per-tick physics path.
+        EntityType type = settings.getProjectileDisguise();
         if (type != null) {
 
             FakeEntity fakeEntity;
@@ -106,13 +127,6 @@ public class Projectile implements Serializer<Projectile> {
             }
 
             projectile.spawnDisguise(fakeEntity);
-        }
-
-        if (weaponTitle != null) {
-            // Handle explosions
-            Explosion explosion = WeaponMechanics.getInstance().getWeaponConfigurations().getObject(weaponTitle + ".Explosion", Explosion.class);
-            if (explosion != null)
-                explosion.handleExplosion(projectile.getShooter(), projectile, ExplosionTrigger.SPAWN);
         }
 
         WeaponMechanics.getInstance().getProjectileSpawner().spawn(projectile);

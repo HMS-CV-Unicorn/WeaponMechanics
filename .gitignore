@@ -26,3 +26,6 @@ build/
 # Maven
 log/
 target/
+CLAUDE.md
+.claude/settings.local.json
+.gitignore
