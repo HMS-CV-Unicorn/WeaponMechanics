@@ -28,8 +28,8 @@ import java.util.function.Predicate;
  */
 public class PredictiveProjectileSimulator {
 
-    /** Default rollback used when the shooter has no measurable ping. ~100ms client interpolation. */
-    private static final int DEFAULT_INTERP_TICKS = 2;
+    /** Default rollback used when the shooter has no measurable ping. ~150ms client interpolation (vanilla Java client default). */
+    private static final int DEFAULT_INTERP_TICKS = 3;
     private static final int MIN_ROLLBACK_TICKS = 0;
     private static final int MAX_ROLLBACK_TICKS = 10;
 

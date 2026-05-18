@@ -40,11 +40,19 @@ public class ScheduledHitDispatcher {
         ServerImplementation scheduler = WeaponMechanics.getInstance().getFoliaScheduler();
         ProjectileSettings settings = projectile.getProjectileSettings();
 
-        // Attach scripts now that the synchronous burst is done. Reset the alive-tick counter so
-        // scripts see a fresh-from-fire-time projectile during animation, even though the
-        // simulator already advanced it internally.
+        // Attach scripts now that the synchronous burst is done. Reset the alive-tick counter and
+        // rewind the projectile to its spawn position so scripts see a fresh-from-fire-time
+        // projectile during animation, even though the simulator already advanced it internally.
+        // The first setLocation overwrites lastLocation with the simulator's end-of-flight value,
+        // and the second pins lastLocation to the spawn so the first animation step computes a
+        // correct one-tick delta.
         WeaponMechanics.getInstance().getProjectileSpawner().attachScripts(projectile);
         projectile.setAliveTicks(0);
+        if (!result.path().isEmpty()) {
+            Vector spawn = result.path().get(0).location();
+            projectile.setLocation(spawn);
+            projectile.setLocation(spawn);
+        }
         try {
             projectile.onStart();
         } catch (Throwable ex) {
@@ -126,8 +134,10 @@ public class ScheduledHitDispatcher {
             Vector delta = current.location().clone().subtract(previous.location());
 
             // Sync the projectile's per-tick state so scripts reading getLocation/getMotion/
-            // getAliveTicks during their callbacks see what they would see in PHYSICAL mode.
-            projectile.setRawLocation(current.location());
+            // getLastLocation/getAliveTicks during their callbacks see what they would see in
+            // PHYSICAL mode. Use setLocation (not setRawLocation) so lastLocation advances every
+            // tick — TrailScript and others compute their per-tick delta as location-lastLocation.
+            projectile.setLocation(current.location());
             projectile.setMotion(delta);
             projectile.setAliveTicks(current.tickOffset());
 
